@@ -141,7 +141,9 @@ for option in \
         exit 1
     fi
 done
-make ARCH=arm64 %{?_smp_mflags} Image modules dtbs
+make ARCH=arm64 %{?_smp_mflags} \
+    KBUILD_HOSTCFLAGS="-include stdint.h -include linux/types.h" \
+    Image modules dtbs
 test "$(make -s ARCH=arm64 kernelrelease)" = "%{kernelrelease}"
 
 %install
