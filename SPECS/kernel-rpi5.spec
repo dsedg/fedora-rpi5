@@ -1,14 +1,17 @@
-%{!?kernel_commit:%global kernel_commit b0b7d2006113562307ade2f6a075b03f3a781346}
-%{!?kernel_version:%global kernel_version 6.18.64}
+%{!?kernel_commit:%global kernel_commit b005af6699cc67413be78028a201e87fe40dcb50}
+%{!?kernel_version:%global kernel_version 7.3.5}
 
-Name:           kernel-rpi5
+Name:           kernel
 Version:        %{kernel_version}
-Release:        1%{?dist}
-%global kernelrelease %{version}-rpi5
-Summary:        Raspberry Pi 5 Linux kernel
+Release:        300.rpi5%{?dist}
+%global kernelrelease %{version}-%{release}.%{_target_cpu}
+Summary:        Linux kernel for Raspberry Pi 5
 License:        GPL-2.0-only AND GPL-2.0-or-later AND GPL-1.0-or-later AND MIT AND BSD-2-Clause AND BSD-3-Clause AND ISC AND X11
 URL:            https://github.com/raspberrypi/linux
 Source0:        https://github.com/raspberrypi/linux/archive/%{kernel_commit}.tar.gz
+# Fedora f45 kernel-aarch64-fedora.config at commit 3393e4e0db8129398c14fed17e09abdd0d1d9822.
+Source1:        kernel-aarch64-fedora.config
+Source2:        kernel-rpi5.config
 ExclusiveArch:  aarch64
 BuildRequires:  bc
 BuildRequires:  bison
@@ -21,33 +24,99 @@ BuildRequires:  make
 BuildRequires:  openssl-devel
 BuildRequires:  perl
 BuildRequires:  python3
+BuildRequires:  xz
 
 Provides:       installonlypkg(kernel)
-Provides:       kernel-uname-r = %{kernelrelease}
+Requires:       kernel-core-uname-r = %{kernelrelease}
+Requires:       kernel-modules-core-uname-r = %{kernelrelease}
+Requires:       kernel-modules-uname-r = %{kernelrelease}
+Requires:       kernel-modules-extra-uname-r = %{kernelrelease}
 
 %description
-The Raspberry Pi downstream Linux kernel built with the Pi 5 device-tree
-configuration for Fedora aarch64 systems.
+The kernel meta-package for the Raspberry Pi 5.
+
+%package core
+Summary:        Core kernel for Raspberry Pi 5
+Provides:       installonlypkg(kernel)
+Provides:       kernel-uname-r = %{kernelrelease}
+Provides:       kernel-core-uname-r = %{kernelrelease}
+Requires:       kernel-modules-core-uname-r = %{kernelrelease}
+Requires(pre):  coreutils
+Requires(pre):  systemd >= 203-2
+Requires(pre):  /usr/bin/kernel-install
+Requires(pre):  dracut >= 027
+Requires(preun): systemd >= 200
+AutoReq:        no
+AutoProv:       yes
+
+%description core
+The kernel image, device trees, and configuration files for Raspberry Pi 5.
+
+%package modules-core
+Summary:        Core modules metadata for Raspberry Pi 5 kernel
+Provides:       installonlypkg(kernel-module)
+Provides:       kernel-modules-core-uname-r = %{kernelrelease}
+Requires:       kernel-uname-r = %{kernelrelease}
+AutoReq:        no
+AutoProv:       yes
+
+%description modules-core
+Core module metadata required by the Raspberry Pi 5 kernel.
+
+%package modules
+Summary:        Kernel modules for Raspberry Pi 5
+Provides:       installonlypkg(kernel-module)
+Provides:       kernel-modules-uname-r = %{kernelrelease}
+Requires:       kernel-uname-r = %{kernelrelease}
+Requires:       kernel-modules-core-uname-r = %{kernelrelease}
+AutoReq:        no
+AutoProv:       yes
+
+%description modules
+The loadable kernel modules for Raspberry Pi 5.
+
+%package modules-extra
+Summary:        Additional kernel modules for Raspberry Pi 5
+Provides:       installonlypkg(kernel-module)
+Provides:       kernel-modules-extra-uname-r = %{kernelrelease}
+Requires:       kernel-uname-r = %{kernelrelease}
+Requires:       kernel-modules-core-uname-r = %{kernelrelease}
+AutoReq:        no
+AutoProv:       yes
+
+%description modules-extra
+Compatibility package for the Fedora kernel module package layout.
+
+# RPM extracts module debug info before compressing the installed modules.
+%define __rpi5_compress_modules \
+  find "$RPM_BUILD_ROOT%{_prefix}/lib/modules/%{kernelrelease}" -type f -name '*.ko' -print0 | \
+    xargs -0 -r xz --compress --check=crc32 --lzma2=dict=1MiB -f \
+%{nil}
+%define __spec_install_post \
+  %{?__debug_package:%{__debug_install_post}}\
+  %{__arch_install_post}\
+  %{__os_install_post}\
+  %{__rpi5_compress_modules}\
+%{nil}
 
 %prep
 %setup -q -n linux-%{kernel_commit}
+cp %{SOURCE1} fedora-aarch64.config
+cp %{SOURCE2} kernel-rpi5.config
 
 %build
-make ARCH=arm64 %{?_smp_mflags} bcm2712_defconfig
+cp fedora-aarch64.config .config
+scripts/kconfig/merge_config.sh -m .config kernel-rpi5.config
 scripts/config --disable ARM64_16K_PAGES \
     --enable ARM64_4K_PAGES \
-    --enable SECURITY \
-    --enable AUDIT \
-    --enable SECURITYFS \
-    --enable SECURITY_NETWORK \
-    --enable SECURITY_PATH \
-    --enable SECURITY_SELINUX \
-    --enable SECCOMP \
-    --set-str LOCALVERSION -rpi5 \
+    --disable MODULE_COMPRESS_ALL \
+    --set-str LOCALVERSION -%{release}.%{_target_cpu} \
     --disable LOCALVERSION_AUTO
 make ARCH=arm64 olddefconfig
 grep -qx 'CONFIG_ARM64_4K_PAGES=y' .config
-grep -qx 'CONFIG_LOCALVERSION="-rpi5"' .config
+grep -qx 'CONFIG_DEBUG_INFO=y' .config
+! grep -qx 'CONFIG_MODULE_COMPRESS_ALL=y' .config
+grep -qx 'CONFIG_LOCALVERSION="-%{release}.%{_target_cpu}"' .config
 for option in \
     ARCH_BCM ARCH_BCM2835 ARCH_BRCMSTB PCI PCIE_BRCMSTB MFD_RP1 \
     PINCTRL_BCM2712 PINCTRL_RP1 COMMON_CLK_RP1 BCMGENET MMC_BCM2835 \
@@ -58,7 +127,7 @@ for option in \
     SECURITY_PATH SECURITY_SELINUX SECCOMP NAMESPACES USER_NS CGROUPS \
     CGROUP_BPF DEVTMPFS DEVTMPFS_MOUNT; do
     if ! grep -qx "CONFIG_${option}=y" .config; then
-        echo "Required built-in Raspberry Pi 5 option is disabled: CONFIG_${option}" >&2
+        echo "Required built-in Fedora/Raspberry Pi option is disabled: CONFIG_${option}" >&2
         exit 1
     fi
 done
@@ -75,22 +144,75 @@ make ARCH=arm64 %{?_smp_mflags} Image modules dtbs
 test "$(make -s ARCH=arm64 kernelrelease)" = "%{kernelrelease}"
 
 %install
-install -D -m 0755 arch/arm64/boot/Image \
-    %{buildroot}/boot/vmlinuz-%{kernelrelease}
-install -D -m 0644 .config \
-    %{buildroot}%{_prefix}/lib/modules/%{kernelrelease}/config
-install -D -m 0644 System.map \
-    %{buildroot}%{_prefix}/lib/modules/%{kernelrelease}/System.map
-make ARCH=arm64 modules_install \
-    INSTALL_MOD_PATH=%{buildroot}%{_prefix} \
-    INSTALL_MOD_STRIP=1
-rm -f %{buildroot}%{_prefix}/lib/modules/%{kernelrelease}/build \
-      %{buildroot}%{_prefix}/lib/modules/%{kernelrelease}/source
-make ARCH=arm64 dtbs_install \
-    INSTALL_DTBS_PATH=%{buildroot}%{_prefix}/lib/firmware/raspberrypi-kernel/%{kernelrelease}
-depmod -b %{buildroot}%{_prefix} %{kernelrelease}
+moddir="%{buildroot}%{_prefix}/lib/modules/%{kernelrelease}"
+install -D -m 0644 arch/arm64/boot/Image "${moddir}/vmlinuz"
+install -D -m 0644 .config "${moddir}/config"
+install -D -m 0644 System.map "${moddir}/System.map"
+install -D -m 0755 vmlinux "${moddir}/vmlinux"
+make ARCH=arm64 modules_install INSTALL_MOD_PATH=%{buildroot}%{_prefix}
+find "${moddir}/kernel" -type f -name '*.ko' -exec chmod u+x {} +
+rm -f "${moddir}/build" "${moddir}/source"
+make ARCH=arm64 dtbs_install INSTALL_DTBS_PATH="${moddir}/dtb"
+
+%post core
+mkdir -p %{_localstatedir}/lib/rpm-state/%{name}
+touch %{_localstatedir}/lib/rpm-state/%{name}/installing_core_%{kernelrelease}
+
+%posttrans core
+rm -f %{_localstatedir}/lib/rpm-state/%{name}/installing_core_%{kernelrelease}
+/bin/kernel-install add %{kernelrelease} /lib/modules/%{kernelrelease}/vmlinuz || :
+
+%preun core
+/bin/kernel-install remove %{kernelrelease} || :
+
+%post modules
+/sbin/depmod -a %{kernelrelease}
+
+%postun modules
+/sbin/depmod -a %{kernelrelease}
+
+%post modules-extra
+/sbin/depmod -a %{kernelrelease}
+
+%postun modules-extra
+/sbin/depmod -a %{kernelrelease}
+
+%posttrans modules-core
+/sbin/depmod -a %{kernelrelease}
 
 %files
-/boot/vmlinuz-%{kernelrelease}
-%{_prefix}/lib/modules/%{kernelrelease}/
-%{_prefix}/lib/firmware/raspberrypi-kernel/%{kernelrelease}/
+
+%files core
+%dir %{_prefix}/lib/modules
+%dir %{_prefix}/lib/modules/%{kernelrelease}
+%{_prefix}/lib/modules/%{kernelrelease}/vmlinuz
+%{_prefix}/lib/modules/%{kernelrelease}/vmlinux
+%{_prefix}/lib/modules/%{kernelrelease}/config
+%{_prefix}/lib/modules/%{kernelrelease}/System.map
+%{_prefix}/lib/modules/%{kernelrelease}/modules.builtin*
+%{_prefix}/lib/modules/%{kernelrelease}/dtb
+%ghost /boot/vmlinuz-%{kernelrelease}
+%ghost /boot/System.map-%{kernelrelease}
+%ghost /boot/config-%{kernelrelease}
+%ghost /boot/initramfs-%{kernelrelease}.img
+%ghost /boot/dtb-%{kernelrelease}
+
+%files modules-core
+%dir %{_prefix}/lib/modules/%{kernelrelease}
+%{_prefix}/lib/modules/%{kernelrelease}/modules.order
+%ghost %attr(0644, root, root) %{_prefix}/lib/modules/%{kernelrelease}/modules.alias
+%ghost %attr(0644, root, root) %{_prefix}/lib/modules/%{kernelrelease}/modules.alias.bin
+%ghost %attr(0644, root, root) %{_prefix}/lib/modules/%{kernelrelease}/modules.builtin.alias.bin
+%ghost %attr(0644, root, root) %{_prefix}/lib/modules/%{kernelrelease}/modules.builtin.bin
+%ghost %attr(0644, root, root) %{_prefix}/lib/modules/%{kernelrelease}/modules.dep
+%ghost %attr(0644, root, root) %{_prefix}/lib/modules/%{kernelrelease}/modules.dep.bin
+%ghost %attr(0644, root, root) %{_prefix}/lib/modules/%{kernelrelease}/modules.devname
+%ghost %attr(0644, root, root) %{_prefix}/lib/modules/%{kernelrelease}/modules.softdep
+%ghost %attr(0644, root, root) %{_prefix}/lib/modules/%{kernelrelease}/modules.symbols
+%ghost %attr(0644, root, root) %{_prefix}/lib/modules/%{kernelrelease}/modules.symbols.bin
+%ghost %attr(0644, root, root) %{_prefix}/lib/modules/%{kernelrelease}/modules.weakdep
+
+%files modules
+%{_prefix}/lib/modules/%{kernelrelease}/kernel
+
+%files modules-extra
