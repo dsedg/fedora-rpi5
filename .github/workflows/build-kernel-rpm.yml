@@ -1,0 +1,86 @@
+name: Build Raspberry Pi kernel RPMs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.kernel_branch }}
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: fedora:45
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel_branch:
+          - rpi-6.18.y
+          - rpi-7.2.y
+    steps:
+      - name: Check out packaging
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          dnf install -y \
+            bc bison curl dwarves elfutils-libelf-devel flex gcc git-core \
+            kmod make openssl-devel perl python3 rpm-build tar xz
+
+      - name: Resolve kernel branch
+        id: kernel
+        env:
+          KERNEL_BRANCH: ${{ matrix.kernel_branch }}
+        run: |
+          set -euo pipefail
+          commit="$(git ls-remote https://github.com/raspberrypi/linux.git \
+            "refs/heads/${KERNEL_BRANCH}" | cut -f1)"
+          if [[ ! "${commit}" =~ ^[[:xdigit:]]{40}$ ]]; then
+            echo "Could not resolve Raspberry Pi branch ${KERNEL_BRANCH}" >&2
+            exit 1
+          fi
+
+          makefile="${RUNNER_TEMP}/kernel-Makefile"
+          curl --fail --location --retry 3 \
+            "https://raw.githubusercontent.com/raspberrypi/linux/${commit}/Makefile" \
+            --output "${makefile}"
+          version="$(awk -F ' = ' '
+            $1 == "VERSION" { major = $2 }
+            $1 == "PATCHLEVEL" { minor = $2 }
+            $1 == "SUBLEVEL" { patch = $2 }
+            END {
+              if (major !~ /^[0-9]+$/ || minor !~ /^[0-9]+$/ ||
+                  patch !~ /^[0-9]+$/) {
+                exit 1
+              }
+              printf "%s.%s.%s\n", major, minor, patch
+            }
+          ' "${makefile}")"
+
+          echo "commit=${commit}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "Building ${KERNEL_BRANCH} at ${commit} (version ${version})"
+
+      - name: Build RPM and source RPM
+        env:
+          KERNEL_COMMIT: ${{ steps.kernel.outputs.commit }}
+          KERNEL_VERSION: ${{ steps.kernel.outputs.version }}
+        run: ./scripts/build-rpm.sh
+
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-rpi5-${{ matrix.kernel_branch }}-${{ steps.kernel.outputs.version }}
+          path: |
+            rpmbuild/RPMS/aarch64/*.rpm
+            rpmbuild/SRPMS/*.rpm
+          if-no-files-found: error
+          retention-days: 14
