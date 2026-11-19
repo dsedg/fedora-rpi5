@@ -1,4 +1,4 @@
-%{!?kernel_commit:%global kernel_commit b005af6699cc67413be78028a201e87fe40dcb50}
+%{!?kernel_commit:%global kernel_commit 1ef812a522e2a929f7a9a00f7e2ca0cff21086c7}
 %{!?kernel_version:%global kernel_version 7.3.5}
 
 Name:           kernel

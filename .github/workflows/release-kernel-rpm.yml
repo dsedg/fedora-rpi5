@@ -1,0 +1,157 @@
+name: Release Raspberry Pi kernel RPMs
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+      github.event.pull_request.head.ref == 'automation/sync-kernel-branches')
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pins.outputs.matrix }}
+      target: ${{ steps.pins.outputs.target }}
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Find unpublished kernel pins
+        id: pins
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TARGET: ${{ github.event_name == 'pull_request' && github.event.pull_request.merge_commit_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/pins.json"
+          import json
+          import re
+          from pathlib import Path
+          import urllib.request
+
+          manifest = json.loads(Path("SOURCES/kernel-branch-pins.json").read_text())
+          expected = {"rpi-6.18.y", "rpi-7.2.y", "rpi-7.3.y"}
+          if set(manifest) != expected:
+              raise SystemExit("Kernel pin manifest does not contain all supported branches")
+
+          pins = []
+          for branch, pin in sorted(manifest.items()):
+              commit = pin["commit"]
+              version = pin["version"]
+              if not re.fullmatch(r"[0-9a-f]{40}", commit):
+                  raise SystemExit(f"Invalid commit pin for {branch}")
+              if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+                  raise SystemExit(f"Invalid kernel version for {branch}")
+
+              url = f"https://raw.githubusercontent.com/raspberrypi/linux/{commit}/Makefile"
+              makefile = urllib.request.urlopen(url, timeout=30).read().decode()
+              parts = {}
+              for line in makefile.splitlines():
+                  key, sep, value = line.partition(" = ")
+                  if sep and key in ("VERSION", "PATCHLEVEL", "SUBLEVEL"):
+                      parts[key] = value
+              if set(parts) != {"VERSION", "PATCHLEVEL", "SUBLEVEL"}:
+                  raise SystemExit(f"Could not read upstream version for {branch}")
+              actual = ".".join(parts[key] for key in ("VERSION", "PATCHLEVEL", "SUBLEVEL"))
+              if version != actual:
+                  raise SystemExit(
+                      f"Pin for {branch} says {version}, upstream commit reports {actual}"
+                  )
+
+              release_tag = f"kernel-{branch.removeprefix('rpi-')}-{version}-{commit[:12]}"
+              pins.append({
+                  "branch": branch,
+                  "commit": commit,
+                  "version": version,
+                  "tag": release_tag,
+              })
+          print(json.dumps(pins))
+          PY
+
+          release_tags="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[].tag_name')"
+          python3 - "${RUNNER_TEMP}/pins.json" "${GITHUB_OUTPUT}" "${release_tags}" <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import sys
+
+          pins = json.loads(Path(sys.argv[1]).read_text())
+          tags = set(sys.argv[3].splitlines())
+          for pin in pins:
+              pin["released"] = pin["tag"] in tags
+          with open(sys.argv[2], "a") as output:
+              output.write(f"matrix={json.dumps({'include': pins)}\n")
+              output.write(f"target={os.environ['RELEASE_TARGET']}\n")
+          PY
+
+  release:
+    needs: prepare
+    if: needs.prepare.result == 'success'
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    container:
+      image: fedora:45
+    steps:
+      - name: Skip existing release
+        if: matrix.released
+        run: echo "Release ${RELEASE_TAG} already exists."
+        env:
+          RELEASE_TAG: ${{ matrix.tag }}
+
+      - name: Check out release source
+        if: ${{ !matrix.released }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.target }}
+          persist-credentials: false
+
+      - name: Install build and release dependencies
+        if: ${{ !matrix.released }}
+        run: |
+          dnf install -y \
+            bc bison curl dwarves elfutils-libelf-devel flex gcc gh git-core \
+            kmod make openssl openssl-devel perl python3 rpm-build tar xz
+
+      - name: Build RPM and source RPM
+        if: ${{ !matrix.released }}
+        env:
+          KERNEL_COMMIT: ${{ matrix.commit }}
+          KERNEL_VERSION: ${{ matrix.version }}
+        run: ./scripts/build-rpm.sh
+
+      - name: Publish GitHub release
+        if: ${{ !matrix.released }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ matrix.tag }}
+          KERNEL_COMMIT: ${{ matrix.commit }}
+          KERNEL_VERSION: ${{ matrix.version }}
+          KERNEL_BRANCH: ${{ matrix.branch }}
+          RELEASE_TARGET: ${{ needs.prepare.outputs.target }}
+        run: |
+          set -euo pipefail
+          mapfile -t assets < <(
+            find rpmbuild/RPMS/aarch64 rpmbuild/SRPMS -type f -name '*.rpm' -print | sort
+          )
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "No RPM or source RPM assets were produced." >&2
+            exit 1
+          fi
+
+          gh release create "${RELEASE_TAG}" "${assets[@]}" \
+            --target "${RELEASE_TARGET}" \
+            --title "Fedora Raspberry Pi 5 kernel ${KERNEL_BRANCH} ${KERNEL_VERSION}" \
+            --notes "Built from Raspberry Pi Linux ${KERNEL_VERSION} on ${KERNEL_BRANCH}, upstream commit ${KERNEL_COMMIT}."

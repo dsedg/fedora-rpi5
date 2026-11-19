@@ -1,0 +1,138 @@
+name: Sync Raspberry Pi kernel pins
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out packaging
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve upstream kernel
+        id: upstream
+        run: |
+          set -euo pipefail
+          pins='['
+          for branch in rpi-6.18.y rpi-7.2.y rpi-7.3.y; do
+            commit="$(git ls-remote https://github.com/raspberrypi/linux.git \
+              "refs/heads/${branch}" | cut -f1)"
+            if [[ ! "${commit}" =~ ^[[:xdigit:]]{40}$ ]]; then
+              echo "Could not resolve Raspberry Pi branch ${branch}" >&2
+              exit 1
+            fi
+
+            makefile="${RUNNER_TEMP}/kernel-Makefile"
+            curl --fail --location --retry 3 \
+              "https://raw.githubusercontent.com/raspberrypi/linux/${commit}/Makefile" \
+              --output "${makefile}"
+            version="$(awk -F ' = ' '
+              $1 == "VERSION" { major = $2 }
+              $1 == "PATCHLEVEL" { minor = $2 }
+              $1 == "SUBLEVEL" { patch = $2 }
+              END {
+                if (major !~ /^[0-9]+$/ || minor !~ /^[0-9]+$/ ||
+                    patch !~ /^[0-9]+$/) {
+                  exit 1
+                }
+                printf "%s.%s.%s", major, minor, patch
+              }
+            ' "${makefile}")"
+
+            if [[ "${pins}" != '[' ]]; then
+              pins+=','
+            fi
+            pins+="{\"branch\":\"${branch}\",\"commit\":\"${commit}\",\"version\":\"${version}\"}"
+          done
+          pins+=']'
+          echo "pins=${pins}" >> "${GITHUB_OUTPUT}"
+
+      - name: Update pinned source and version
+        env:
+          KERNEL_PINS: ${{ steps.upstream.outputs.pins }}
+        run: |
+          set -euo pipefail
+          python3 - "${KERNEL_PINS}" <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+
+          pins = json.loads(sys.argv[1])
+          expected = {"rpi-6.18.y", "rpi-7.2.y", "rpi-7.3.y"}
+          if {pin["branch"] for pin in pins} != expected:
+              raise SystemExit("Upstream pin set does not match supported branches")
+
+          manifest = {
+              pin["branch"]: {"commit": pin["commit"], "version": pin["version"]}
+              for pin in pins
+          }
+          Path("SOURCES/kernel-branch-pins.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+          )
+
+          current = next(pin for pin in pins if pin["branch"] == "rpi-7.3.y")
+          spec = Path("SPECS/kernel-rpi5.spec")
+          lines = spec.read_text().splitlines()
+          for name, value in (
+              ("kernel_commit", current["commit"]),
+              ("kernel_version", current["version"]),
+          ):
+              prefix = f"%{{!?{name}:%global {name} "
+              matches = [i for i, line in enumerate(lines) if line.startswith(prefix)]
+              if len(matches) != 1 or not lines[matches[0]].endswith("}"):
+                  raise SystemExit(f"Expected exactly one {name} default in {spec}")
+              lines[matches[0]] = f"{prefix}{value}}}"
+
+          spec.write_text("\n".join(lines) + "\n")
+          PY
+
+      - name: Commit and open or update sync pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KERNEL_PINS: ${{ steps.upstream.outputs.pins }}
+          PR_BRANCH: automation/sync-kernel-branches
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- SPECS/kernel-rpi5.spec SOURCES/kernel-branch-pins.json; then
+            echo "Pinned Raspberry Pi kernel branches are already current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${PR_BRANCH}"
+          git add SPECS/kernel-rpi5.spec SOURCES/kernel-branch-pins.json
+          git commit -m "Sync Raspberry Pi kernel branch pins"
+          gh auth setup-git
+          git push --force origin "HEAD:refs/heads/${PR_BRANCH}"
+
+          title="Sync Raspberry Pi kernel branch pins"
+          body="$(python3 - "${KERNEL_PINS}" <<'PY'
+          import json
+          import sys
+
+          pins = json.loads(sys.argv[1])
+          print("Update the pinned Raspberry Pi Linux commits and versions:")
+          for pin in pins:
+              print(f"- `{pin['branch']}`: {pin['version']} (`{pin['commit']}`)")
+          print()
+          print("Merging this PR publishes a separate RPM release for each new pin.")
+          PY
+          )"
+          pr_url="$(gh pr list --head "${PR_BRANCH}" --base main --state open \
+            --json url --jq '.[0].url // empty')"
+          if [[ -n "${pr_url}" ]]; then
+            gh pr edit "${pr_url}" --title "${title}" --body "${body}"
+          else
+            gh pr create --base main --head "${PR_BRANCH}" \
+              --title "${title}" --body "${body}"
+          fi

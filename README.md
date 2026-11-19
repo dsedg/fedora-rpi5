@@ -12,7 +12,7 @@ sign the kernel and modules.
 The kernel release uses Fedora's version-release-architecture format with an
 `rpi5` release tag, keeping its module and boot paths distinct from the stock
 Fedora kernel. The local build defaults to commit
-[`b005af6699cc67413be78028a201e87fe40dcb50`](https://github.com/raspberrypi/linux/commit/b005af6699cc67413be78028a201e87fe40dcb50)
+[`1ef812a522e2a929f7a9a00f7e2ca0cff21086c7`](https://github.com/raspberrypi/linux/commit/1ef812a522e2a929f7a9a00f7e2ca0cff21086c7)
 on Raspberry Pi's `rpi-7.3.y` branch (kernel version 7.3.5). The base
 configuration is Fedora's `kernel-aarch64-fedora.config`, pinned to Fedora
 kernel packaging commit
@@ -96,11 +96,24 @@ The local spec defaults remain pinned; the workflow passes each branch's
 resolved commit and version as RPM macros, so builds are reproducible for the
 specific commit logged in the Actions run.
 
+The [sync workflow](.github/workflows/sync-kernel-pin.yml) checks
+`rpi-6.18.y`, `rpi-7.2.y`, and `rpi-7.3.y` weekly and opens or updates a pull
+request with each upstream commit and kernel version read from that commit's
+`Makefile`. The branch pins are recorded in
+[`SOURCES/kernel-branch-pins.json`](SOURCES/kernel-branch-pins.json), with the
+`rpi-7.3.y` pin also used as the local spec default. Merging a sync pull request
+runs the [release workflow](.github/workflows/release-kernel-rpm.yml), which
+builds RPMs and an SRPM and publishes a separate GitHub Release for each new
+pin. Release tags include the branch, actual kernel version, and commit prefix
+(for example, `kernel-7.3.y-7.3.5-1ef812a522e2`), so updates are tracked even
+when the upstream kernel version has not changed. The release workflow can also
+be manually dispatched to publish any pins that do not already have releases.
+
 To locally build the currently resolved `rpi-7.3.y` revision, pass its commit
 and kernel version to the same script:
 
 ```bash
-KERNEL_COMMIT=b005af6699cc67413be78028a201e87fe40dcb50 \
+KERNEL_COMMIT=1ef812a522e2a929f7a9a00f7e2ca0cff21086c7 \
 KERNEL_VERSION=7.3.5 ./scripts/build-rpm.sh
 ```
 
