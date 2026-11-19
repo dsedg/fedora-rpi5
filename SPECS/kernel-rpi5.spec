@@ -143,7 +143,7 @@ for option in \
     fi
 done
 make ARCH=arm64 %{?_smp_mflags} \
-    HOSTCFLAGS="-I${PWD}/tools/include -I${PWD}/tools/include/uapi -I${PWD}/arch/arm64/include/uapi -D__u128=rpi5_host_u128 -D__s128=rpi5_host_s128" \
+    HOSTCFLAGS="-I${PWD}/arch/arm64/include/uapi -D__u128=rpi5_host_u128 -D__s128=rpi5_host_s128" \
     Image modules dtbs
 test "$(make -s ARCH=arm64 kernelrelease)" = "%{kernelrelease}"
 
