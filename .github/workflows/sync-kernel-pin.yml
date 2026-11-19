@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           pins='['
-          for branch in rpi-6.18.y rpi-7.2.y rpi-7.3.y; do
+          for branch in rpi-6.18.y rpi-7.3.y; do
             commit="$(git ls-remote https://github.com/raspberrypi/linux.git \
               "refs/heads/${branch}" | cut -f1)"
             if [[ ! "${commit}" =~ ^[[:xdigit:]]{40}$ ]]; then
@@ -67,7 +67,7 @@ jobs:
           import sys
 
           pins = json.loads(sys.argv[1])
-          expected = {"rpi-6.18.y", "rpi-7.2.y", "rpi-7.3.y"}
+          expected = {"rpi-6.18.y", "rpi-7.3.y"}
           if {pin["branch"] for pin in pins} != expected:
               raise SystemExit("Upstream pin set does not match supported branches")
 

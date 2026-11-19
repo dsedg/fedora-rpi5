@@ -75,17 +75,17 @@ Potential areas to review, in order, when reducing build scope:
    PCIe/NVMe, networking, and any planned adapters.
 
 The build already disables `DRM_XE` because its display code failed to compile
-on the `rpi-7.2.y` branch. The current Cirrus audio configuration also enables
-`MFD_ARIZONA_I2C` and `MFD_WM5102` to satisfy the `RPI_CIRRUS` sound-card
+on the older `rpi-7.2.y` branch. The current Cirrus audio configuration also
+enables `MFD_ARIZONA_I2C` and `MFD_WM5102` to satisfy the `RPI_CIRRUS` sound-card
 dependencies; if that card is removed, review those settings and their
 assertions in the spec together. Any future pruning should preserve the
-required Pi options checked by the spec and be validated across all kernel
-branches before removing drivers from the shipped RPMs.
+required Pi options checked by the spec and be validated across both supported
+kernel branches before removing drivers from the shipped RPMs.
 
 ## GitHub Actions and kernel branches
 
 The workflow in [`.github/workflows/build-kernel-rpm.yml`](.github/workflows/build-kernel-rpm.yml)
-builds `rpi-6.18.y`, `rpi-7.2.y`, and `rpi-7.3.y` on native ARM64
+builds `rpi-6.18.y` and `rpi-7.3.y` on native ARM64
 GitHub-hosted runners in a Fedora 45 container. It runs for pushes to `main`,
 pull requests, weekly, or manually. Each run resolves the selected upstream
 branch to a commit and uploads the RPMs, including generated debuginfo and
@@ -97,7 +97,7 @@ resolved commit and version as RPM macros, so builds are reproducible for the
 specific commit logged in the Actions run.
 
 The [sync workflow](.github/workflows/sync-kernel-pin.yml) checks
-`rpi-6.18.y`, `rpi-7.2.y`, and `rpi-7.3.y` weekly and opens or updates a pull
+`rpi-6.18.y` and `rpi-7.3.y` weekly and opens or updates a pull
 request with each upstream commit and kernel version read from that commit's
 `Makefile`. The branch pins are recorded in
 [`SOURCES/kernel-branch-pins.json`](SOURCES/kernel-branch-pins.json), with the

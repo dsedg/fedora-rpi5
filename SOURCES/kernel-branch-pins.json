@@ -3,10 +3,6 @@
     "commit": "adb947547136096c91f037dd392cd8af3aa98451",
     "version": "6.18.64"
   },
-  "rpi-7.2.y": {
-    "commit": "69c2961f233d2a8e92c0a3cc068f4f5f88425e5f",
-    "version": "7.2.15"
-  },
   "rpi-7.3.y": {
     "commit": "1ef812a522e2a929f7a9a00f7e2ca0cff21086c7",
     "version": "7.3.5"

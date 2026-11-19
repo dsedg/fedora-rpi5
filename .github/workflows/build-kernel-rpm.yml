@@ -22,7 +22,6 @@ jobs:
       matrix:
         kernel_branch:
           - rpi-6.18.y
-          - rpi-7.2.y
           - rpi-7.3.y
     steps:
       - name: Check out packaging
