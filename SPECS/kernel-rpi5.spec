@@ -121,6 +121,7 @@ scripts/config --disable ARM64_16K_PAGES \
     --enable ARM64_4K_PAGES \
     --disable MODULE_COMPRESS_ALL \
     --disable DRM_KUNIT_TEST \
+    --disable DRM_XE \
     --set-str LOCALVERSION -%{release}.%{_target_cpu} \
     --disable LOCALVERSION_AUTO
 make ARCH=arm64 olddefconfig
@@ -152,6 +153,19 @@ for option in \
         exit 1
     fi
 done
+for option in MFD_ARIZONA MFD_ARIZONA_I2C MFD_WM5102; do
+    if ! grep -qx "CONFIG_${option}=y" .config; then
+        echo "Required built-in Cirrus audio dependency is disabled: CONFIG_${option}" >&2
+        exit 1
+    fi
+done
+for option in SND_SOC_ARIZONA SND_SOC_WM5102; do
+    if ! grep -qx "CONFIG_${option}=m" .config; then
+        echo "Required Cirrus audio dependency is not a module: CONFIG_${option}" >&2
+        exit 1
+    fi
+done
+! grep -Eq '^CONFIG_DRM_XE=[ym]$' .config
 make ARCH=arm64 %{?_smp_mflags} \
     HOSTCFLAGS="-include ${PWD}/scripts/include/kernel-rpi5-host-uapi-types.h" \
     Image modules dtbs
