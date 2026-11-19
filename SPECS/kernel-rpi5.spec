@@ -77,6 +77,15 @@ AutoProv:       yes
 %description modules
 The loadable kernel modules for Raspberry Pi 5.
 
+%package modules-debuginfo
+Summary:        Debug information for Raspberry Pi 5 kernel modules
+Requires:       kernel-modules-uname-r = %{kernelrelease}
+AutoReq:        no
+AutoProv:       no
+
+%description modules-debuginfo
+The debug information for loadable Raspberry Pi 5 kernel modules.
+
 %package modules-extra
 Summary:        Additional kernel modules for Raspberry Pi 5
 Provides:       installonlypkg(kernel-module)
@@ -242,5 +251,8 @@ rm -f %{_localstatedir}/lib/rpm-state/%{name}/installing_core_%{kernelrelease}
 
 %files modules
 %{_prefix}/lib/modules/%{kernelrelease}/kernel
+
+%files modules-debuginfo
+%{_prefix}/lib/debug/usr/lib/modules/%{kernelrelease}/kernel
 
 %files modules-extra

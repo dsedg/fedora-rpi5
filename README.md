@@ -32,10 +32,11 @@ these settings cannot be satisfied by a kernel branch.
 
 The build produces Fedora-named `kernel`, `kernel-core`, `kernel-modules-core`,
 `kernel-modules`, and `kernel-modules-extra` RPMs. Loadable modules are in
-`kernel-modules`; `modules-core` owns `modules.order` and declares the
-Fedora-style depmod-generated metadata files. Unlike Fedora's full kernel
-build, this focused spec does not classify modules into Fedora's core,
-standard, and extra tiers: all loadable modules are in `kernel-modules`, and
+`kernel-modules`; their debug symbols are in `kernel-modules-debuginfo`.
+`modules-core` owns `modules.order` and declares the Fedora-style
+depmod-generated metadata files. Unlike Fedora's full kernel build, this
+focused spec does not classify modules into Fedora's core, standard, and extra
+tiers: all loadable modules are in `kernel-modules`, and
 `kernel-modules-extra` is an empty compatibility package. Matching package
 names alone does not guarantee RPM-OSTree compatibility; validate the exact
 replacement transaction and boot on the target before relying on it.
@@ -43,6 +44,43 @@ replacement transaction and boot on the target before relying on it.
 The Wi-Fi and Bluetooth drivers also need firmware blobs from Fedora's
 `linux-firmware` package; those blobs are not part of this kernel RPM. Ensure
 that package is present in the target Fedora or Atomic image.
+
+## Future kernel config slimming review
+
+The current build starts with Fedora's broad aarch64 config and merges the
+Pi-specific fragment; it is not a Pi-only config. At the current config
+revision, the Fedora base has 7,829 enabled settings and the Pi fragment has
+83. These counts include non-driver settings and are informational, not a
+measure of the number of compiled drivers. Kconfig dependency resolution can
+also change the final `.config`.
+
+Potential areas to review, in order, when reducing build scope:
+
+1. **Optional Pi add-ons:** The fragment enables many
+   `CONFIG_SND_BCM2708_SOC_*` sound-card modules. Retain only the audio HATs
+   actually used. PoE HAT support (`MFD_RASPBERRYPI_POE_HAT`,
+   `RPI_POE_POWER`), Sense HAT display (`FB_RPISENSE`), and the AXI performance
+   monitor (`RPI_AXIPERF`) are also optional hardware/features.
+2. **Non-Pi media and audio devices inherited from Fedora:** Review unrelated
+   SoC audio drivers and TV/capture-card drivers such as `VIDEO_CX18`,
+   `VIDEO_CX88`, `VIDEO_EM28XX`, `VIDEO_IVTV`, and `VIDEO_PVRUSB2`. Preserve
+   the Pi camera pipeline and any camera sensor or audio HAT drivers in use.
+3. **Unrelated graphics and storage hardware:** Fedora enables AMD and
+   Nouveau graphics modules and multiple enterprise SCSI, SAS, and Fibre
+   Channel adapters. Keep the Pi VideoCore/RP1 display support and common
+   storage layers; remove only hardware-specific drivers that are not needed.
+4. **Other platform, network, and peripheral drivers:** Review support for
+   other SoC families, network vendors, sensors, and peripheral buses against
+   the target's actual hardware. Keep generic support needed for USB storage,
+   PCIe/NVMe, networking, and any planned adapters.
+
+The build already disables `DRM_XE` because its display code failed to compile
+on the `rpi-7.2.y` branch. The current Cirrus audio configuration also enables
+`MFD_ARIZONA_I2C` and `MFD_WM5102` to satisfy the `RPI_CIRRUS` sound-card
+dependencies; if that card is removed, review those settings and their
+assertions in the spec together. Any future pruning should preserve the
+required Pi options checked by the spec and be validated across all kernel
+branches before removing drivers from the shipped RPMs.
 
 ## GitHub Actions and kernel branches
 
