@@ -12,6 +12,7 @@ Source0:        https://github.com/raspberrypi/linux/archive/%{kernel_commit}.ta
 # Fedora f45 kernel-aarch64-fedora.config at commit 3393e4e0db8129398c14fed17e09abdd0d1d9822.
 Source1:        kernel-aarch64-fedora.config
 Source2:        kernel-rpi5.config
+Source3:        kernel-rpi5-host-uapi-types.h
 ExclusiveArch:  aarch64
 BuildRequires:  bc
 BuildRequires:  bison
@@ -103,7 +104,14 @@ Compatibility package for the Fedora kernel module package layout.
 %setup -q -n linux-%{kernel_commit}
 cp %{SOURCE1} fedora-aarch64.config
 cp %{SOURCE2} kernel-rpi5.config
+cp %{SOURCE3} scripts/include/kernel-rpi5-host-uapi-types.h
 sed -i 's/uint8_t/__u8/g' include/uapi/linux/media/raspberrypi/pisp_be_config.h
+sed -i \
+    -e 's/uint8_t/__u8/g' \
+    -e 's/uint16_t/__u16/g' \
+    -e 's/uint32_t/__u32/g' \
+    -e '/#include <linux\/ioctl.h>/a #include <linux/types.h>' \
+    include/uapi/misc/rp1_pio_if.h
 
 %build
 cp fedora-aarch64.config .config
@@ -143,7 +151,7 @@ for option in \
     fi
 done
 make ARCH=arm64 %{?_smp_mflags} \
-    HOSTCFLAGS="-I${PWD}/arch/arm64/include/uapi -D__u128=rpi5_host_u128 -D__s128=rpi5_host_s128" \
+    HOSTCFLAGS="-include ${PWD}/scripts/include/kernel-rpi5-host-uapi-types.h" \
     Image modules dtbs
 test "$(make -s ARCH=arm64 kernelrelease)" = "%{kernelrelease}"
 

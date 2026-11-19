@@ -46,6 +46,7 @@ mkdir -p "${source_dir}" \
 
 cp "${repo_dir}/SOURCES/kernel-aarch64-fedora.config" "${source_dir}/"
 cp "${repo_dir}/SOURCES/kernel-rpi5.config" "${source_dir}/"
+cp "${repo_dir}/SOURCES/kernel-rpi5-host-uapi-types.h" "${source_dir}/"
 
 if [[ ! -s "${source_archive}" ]]; then
     curl --fail --location --retry 3 "${source_url}" --output "${source_archive}"
