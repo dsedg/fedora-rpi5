@@ -120,6 +120,7 @@ scripts/kconfig/merge_config.sh -m .config kernel-rpi5.config
 scripts/config --disable ARM64_16K_PAGES \
     --enable ARM64_4K_PAGES \
     --disable MODULE_COMPRESS_ALL \
+    --disable DRM_KUNIT_TEST \
     --set-str LOCALVERSION -%{release}.%{_target_cpu} \
     --disable LOCALVERSION_AUTO
 make ARCH=arm64 olddefconfig
