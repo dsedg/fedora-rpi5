@@ -103,6 +103,7 @@ Compatibility package for the Fedora kernel module package layout.
 %setup -q -n linux-%{kernel_commit}
 cp %{SOURCE1} fedora-aarch64.config
 cp %{SOURCE2} kernel-rpi5.config
+sed -i 's/uint8_t/__u8/g' include/uapi/linux/media/raspberrypi/pisp_be_config.h
 
 %build
 cp fedora-aarch64.config .config
@@ -142,7 +143,7 @@ for option in \
     fi
 done
 make ARCH=arm64 %{?_smp_mflags} \
-    HOSTCFLAGS="-include stdint.h -D__u128=__uint128_t -D__s128=__int128_t" \
+    HOSTCFLAGS="-I${PWD}/tools/include -I${PWD}/tools/include/uapi -I${PWD}/arch/arm64/include/uapi -D__u128=rpi5_host_u128 -D__s128=rpi5_host_s128" \
     Image modules dtbs
 test "$(make -s ARCH=arm64 kernelrelease)" = "%{kernelrelease}"
 
