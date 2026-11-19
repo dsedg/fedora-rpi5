@@ -73,7 +73,7 @@ Install the build tools and dependencies:
 
 ```bash
 sudo dnf install rpm-build gcc make bc bison flex openssl-devel \
-  elfutils-libelf-devel dwarves perl python3 kmod curl
+  openssl elfutils-libelf-devel dwarves perl python3 kmod curl
 ```
 
 Then run:

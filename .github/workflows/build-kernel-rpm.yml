@@ -34,7 +34,7 @@ jobs:
         run: |
           dnf install -y \
             bc bison curl dwarves elfutils-libelf-devel flex gcc git-core \
-            kmod make openssl-devel perl python3 rpm-build tar xz
+            kmod make openssl openssl-devel perl python3 rpm-build tar xz
 
       - name: Resolve kernel branch
         id: kernel

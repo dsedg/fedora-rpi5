@@ -22,6 +22,7 @@ BuildRequires:  flex
 BuildRequires:  gcc
 BuildRequires:  kmod
 BuildRequires:  make
+BuildRequires:  openssl
 BuildRequires:  openssl-devel
 BuildRequires:  perl
 BuildRequires:  python3
