@@ -82,6 +82,38 @@ assertions in the spec together. Any future pruning should preserve the
 required Pi options checked by the spec and be validated across both supported
 kernel branches before removing drivers from the shipped RPMs.
 
+## Generating a kernel config reference
+
+The script [`scripts/document-kernel-config.py`](scripts/document-kernel-config.py)
+generates Markdown containing the options in one or more kernel config files,
+their source values, Kconfig prompts, and Kconfig help text. The references in
+`docs/` cover each config in `SOURCES/` and the final `.config` used by the build.
+Run it against the matching kernel source tree so symbols are documented from
+the exact kernel revision:
+
+```bash
+kernel_source=rpmbuild/BUILD/linux-1ef812a522e2a929f7a9a00f7e2ca0cff21086c7
+python3 scripts/document-kernel-config.py \
+  SOURCES/kernel-aarch64-fedora.config \
+  --kernel-source "${kernel_source}" \
+  --output docs/kernel-aarch64-fedora-config.md
+python3 scripts/document-kernel-config.py \
+  SOURCES/kernel-rpi5.config \
+  --kernel-source "${kernel_source}" \
+  --output docs/kernel-rpi5-config.md
+python3 scripts/document-kernel-config.py \
+  "${kernel_source}/.config" \
+  --kernel-source "${kernel_source}" \
+  --output docs/kernel-config-reference.md
+```
+
+Replace the example commit with the matching source directory under
+`rpmbuild/BUILD/`. For options listed in multiple input files, the report shows
+the value from each file. Options without Kconfig help are identified as such;
+options missing from the supplied source tree are marked as undefined.
+Regenerate all three references when the kernel pin or config files change.
+The script uses only Python's standard library.
+
 ## GitHub Actions and kernel branches
 
 The workflow in [`.github/workflows/build-kernel-rpm.yml`](.github/workflows/build-kernel-rpm.yml)
