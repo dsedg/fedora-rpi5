@@ -142,7 +142,7 @@ for option in \
     fi
 done
 make ARCH=arm64 %{?_smp_mflags} \
-    KBUILD_HOSTCFLAGS="-I${PWD}/scripts/include -I${PWD}/tools/include -D__u128=__uint128_t -D__s128=__int128_t" \
+    HOSTCFLAGS="-include stdint.h -D__u128=__uint128_t -D__s128=__int128_t" \
     Image modules dtbs
 test "$(make -s ARCH=arm64 kernelrelease)" = "%{kernelrelease}"
 
