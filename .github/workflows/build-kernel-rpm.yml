@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.kernel_branch }}
+    name: ${{ matrix.kernel_branch }} / ${{ matrix.kernel_flavor }}
     runs-on: ubuntu-24.04-arm
     container:
       image: fedora:45
