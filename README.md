@@ -45,34 +45,52 @@ The Wi-Fi and Bluetooth drivers also need firmware blobs from Fedora's
 `linux-firmware` package; those blobs are not part of this kernel RPM. Ensure
 that package is present in the target Fedora or Atomic image.
 
-## Future kernel config slimming review
+## Plasma Bigscreen slimline variant
+
+The opt-in `bigscreen` flavor builds only against the `rpi-7.3.y` kernel line
+and is intended for a Raspberry Pi 5 Plasma Bigscreen image. It is built in CI
+alongside the standard 6.18 and 7.3 packages, without changing either standard
+configuration. The package family is named `kernel-rpi5-bigscreen*` and uses a
+distinct kernel release so it can coexist with the standard kernel.
+
+The Bigscreen config retains Fedora's security and filesystem baseline,
+Raspberry Pi HDMI/V3D graphics, general HDMI/RP1 audio, onboard Broadcom SDIO
+Wi-Fi, Bluetooth, USB, Ethernet, Pi video playback/camera support, TV/radio
+capture, and Pi add-ons including audio, PoE, and Sense HAT support. It drops
+unrelated Wi-Fi vendors, non-Pi PCIe host controllers, discrete/virtual GPU
+drivers, Ceph, hardware RAID/SAS/Fibre Channel and legacy SCSI adapters, and
+non-Pi SoC platforms. The Pi PCIe host, PCIe core, generic SCSI, USB storage,
+SD, NVMe, and software RAID remain available.
+
+To build the current pinned 7.3.y Bigscreen flavor locally on an aarch64 Fedora
+host:
+
+```bash
+KERNEL_FLAVOR=bigscreen \
+KERNEL_COMMIT=1ef812a522e2a929f7a9a00f7e2ca0cff21086c7 \
+KERNEL_VERSION=7.3.5 ./scripts/build-rpm.sh
+```
+
+The GitHub build workflow also builds this flavor from the live `rpi-7.3.y`
+branch and uploads it as a separate artifact.
+
+## Further kernel config slimming review
 
 The current build starts with Fedora's broad aarch64 config and merges the
 Pi-specific fragment; it is not a Pi-only config. At the current config
 revision, the Fedora base has 7,829 enabled settings and the Pi fragment has
 83. These counts include non-driver settings and are informational, not a
 measure of the number of compiled drivers. Kconfig dependency resolution can
-also change the final `.config`.
+also change the final `.config`. This describes the standard flavor; the
+Bigscreen flavor applies additional targeted exclusions in
+`SOURCES/kernel-rpi5-bigscreen.config`.
 
-Potential areas to review, in order, when reducing build scope:
-
-1. **Optional Pi add-ons:** The fragment enables many
-   `CONFIG_SND_BCM2708_SOC_*` sound-card modules. Retain only the audio HATs
-   actually used. PoE HAT support (`MFD_RASPBERRYPI_POE_HAT`,
-   `RPI_POE_POWER`), Sense HAT display (`FB_RPISENSE`), and the AXI performance
-   monitor (`RPI_AXIPERF`) are also optional hardware/features.
-2. **Non-Pi media and audio devices inherited from Fedora:** Review unrelated
-   SoC audio drivers and TV/capture-card drivers such as `VIDEO_CX18`,
-   `VIDEO_CX88`, `VIDEO_EM28XX`, `VIDEO_IVTV`, and `VIDEO_PVRUSB2`. Preserve
-   the Pi camera pipeline and any camera sensor or audio HAT drivers in use.
-3. **Unrelated graphics and storage hardware:** Fedora enables AMD and
-   Nouveau graphics modules and multiple enterprise SCSI, SAS, and Fibre
-   Channel adapters. Keep the Pi VideoCore/RP1 display support and common
-   storage layers; remove only hardware-specific drivers that are not needed.
-4. **Other platform, network, and peripheral drivers:** Review support for
-   other SoC families, network vendors, sensors, and peripheral buses against
-   the target's actual hardware. Keep generic support needed for USB storage,
-   PCIe/NVMe, networking, and any planned adapters.
+Further reductions should focus on unsupported hardware inherited from
+Fedora's broad aarch64 base. The Bigscreen flavor excludes non-Pi SoC
+platforms, Ceph, and non-Pi storage-controller drivers while retaining Pi
+add-ons, TV/radio capture, and generic storage support. Review unrelated
+media drivers such as `VIDEO_CX18`, `VIDEO_CX88`, `VIDEO_EM28XX`,
+`VIDEO_IVTV`, and `VIDEO_PVRUSB2` only if they are not needed by the target.
 
 The build already disables `DRM_XE` because its display code failed to compile
 on the older `rpi-7.2.y` branch. The current Cirrus audio configuration also
@@ -87,9 +105,9 @@ kernel branches before removing drivers from the shipped RPMs.
 The script [`scripts/document-kernel-config.py`](scripts/document-kernel-config.py)
 generates Markdown containing the options in one or more kernel config files,
 their source values, Kconfig prompts, and Kconfig help text. The references in
-`docs/` cover each config in `SOURCES/` and the final `.config` used by the build.
-Run it against the matching kernel source tree so symbols are documented from
-the exact kernel revision:
+`docs/` cover the standard config files and final `.config`. Run it against the
+matching kernel source tree so symbols are documented from the exact kernel
+revision. To document the Bigscreen fragment as well, run:
 
 ```bash
 kernel_source=rpmbuild/BUILD/linux-1ef812a522e2a929f7a9a00f7e2ca0cff21086c7
@@ -101,6 +119,10 @@ python3 scripts/document-kernel-config.py \
   SOURCES/kernel-rpi5.config \
   --kernel-source "${kernel_source}" \
   --output docs/kernel-rpi5-config.md
+python3 scripts/document-kernel-config.py \
+  SOURCES/kernel-rpi5-bigscreen.config \
+  --kernel-source "${kernel_source}" \
+  --output docs/kernel-rpi5-bigscreen-config.md
 python3 scripts/document-kernel-config.py \
   "${kernel_source}/.config" \
   --kernel-source "${kernel_source}" \

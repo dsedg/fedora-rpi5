@@ -20,9 +20,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        kernel_branch:
-          - rpi-6.18.y
-          - rpi-7.3.y
+        include:
+          - kernel_branch: rpi-6.18.y
+            kernel_flavor: standard
+          - kernel_branch: rpi-7.3.y
+            kernel_flavor: standard
+          - kernel_branch: rpi-7.3.y
+            kernel_flavor: bigscreen
     steps:
       - name: Check out packaging
         uses: actions/checkout@v4
@@ -73,12 +77,13 @@ jobs:
         env:
           KERNEL_COMMIT: ${{ steps.kernel.outputs.commit }}
           KERNEL_VERSION: ${{ steps.kernel.outputs.version }}
+          KERNEL_FLAVOR: ${{ matrix.kernel_flavor }}
         run: ./scripts/build-rpm.sh
 
       - name: Upload RPM artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kernel-rpi5-${{ matrix.kernel_branch }}-${{ steps.kernel.outputs.version }}
+          name: kernel-rpi5-${{ matrix.kernel_flavor }}-${{ matrix.kernel_branch }}-${{ steps.kernel.outputs.version }}
           path: |
             rpmbuild/RPMS/aarch64/*.rpm
             rpmbuild/SRPMS/*.rpm

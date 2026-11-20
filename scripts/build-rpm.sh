@@ -11,9 +11,20 @@ default_version="$(grep -F '%{!?kernel_version:%global kernel_version ' "${spec_
     | sed 's/^.*kernel_version //; s/}$//')"
 commit="${KERNEL_COMMIT:-${default_commit}}"
 version="${KERNEL_VERSION:-${default_version}}"
+flavor="${KERNEL_FLAVOR:-standard}"
 
 if [[ ! "${commit}" =~ ^[[:xdigit:]]{40}$ ]]; then
     printf 'KERNEL_COMMIT must be a 40-character hexadecimal commit.\n' >&2
+    exit 1
+fi
+
+if [[ "${flavor}" != "standard" && "${flavor}" != "bigscreen" ]]; then
+    printf 'KERNEL_FLAVOR must be standard or bigscreen.\n' >&2
+    exit 1
+fi
+
+if [[ "${flavor}" == "bigscreen" && ! "${version}" =~ ^7\.3\.[0-9]+$ ]]; then
+    printf 'The Bigscreen kernel variant is only supported on rpi-7.3.y.\n' >&2
     exit 1
 fi
 
@@ -58,6 +69,7 @@ mkdir -p "${source_dir}" \
 cp "${repo_dir}/SOURCES/kernel-aarch64-fedora.config" "${source_dir}/"
 cp "${repo_dir}/SOURCES/kernel-rpi5.config" "${source_dir}/"
 cp "${repo_dir}/SOURCES/kernel-rpi5-host-uapi-types.h" "${source_dir}/"
+cp "${repo_dir}/SOURCES/kernel-rpi5-bigscreen.config" "${source_dir}/"
 
 if [[ ! -s "${source_archive}" ]]; then
     curl --fail --location --retry 3 "${source_url}" --output "${source_archive}"
@@ -89,17 +101,22 @@ rpmbuild \
     --define "_topdir ${topdir}" \
     --define "kernel_commit ${commit}" \
     --define "kernel_version ${version}" \
+    --define "kernel_flavor ${flavor}" \
     "${build_mode}" \
     "${build_spec}"
 
 if [[ "${srpm_only}" == "true" ]]; then
+    rpm_name=kernel
+    if [[ "${flavor}" == "bigscreen" ]]; then
+        rpm_name=kernel-rpi5-bigscreen
+    fi
     mapfile -t srpms < <(
         find "${topdir}/SRPMS" -maxdepth 1 -type f \
-            -name "kernel-${version}-*.src.rpm" -print | sort
+            -name "${rpm_name}-${version}-*.src.rpm" -print | sort
     )
     if [[ "${#srpms[@]}" -ne 1 ]]; then
-        printf 'Expected exactly one source RPM for %s; found %s.\n' \
-            "${version}" "${#srpms[@]}" >&2
+        printf 'Expected exactly one source RPM for %s (%s); found %s.\n' \
+            "${version}" "${rpm_name}" "${#srpms[@]}" >&2
         exit 1
     fi
 
