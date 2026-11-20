@@ -5,7 +5,8 @@ repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 branch="${1:-}"
 
 case "${branch}" in
-    rpi-6.18.y|rpi-7.3.y) ;;
+    rpi-6.18.y) flavor=standard ;;
+    rpi-7.3.y) flavor=bigscreen ;;
     *)
         printf 'Unsupported Raspberry Pi kernel branch: %s\n' "${branch}" >&2
         exit 1
@@ -44,5 +45,6 @@ cd "${repo_dir}"
 BUILD_SRPM_ONLY=true \
 KERNEL_COMMIT="${commit}" \
 KERNEL_VERSION="${version}" \
+KERNEL_FLAVOR="${flavor}" \
 COPR_SRPM_OUTDIR="${COPR_SRPM_OUTDIR}" \
     ./scripts/build-rpm.sh
