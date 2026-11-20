@@ -91,7 +91,7 @@ jobs:
           for pin in pins:
               pin["released"] = pin["tag"] in tags
           with open(sys.argv[2], "a") as output:
-              output.write(f"matrix={json.dumps({'include': pins)}\n")
+              output.write("matrix=" + json.dumps({"include": pins}) + "\n")
               output.write(f"target={os.environ['RELEASE_TARGET']}\n")
           PY
 
