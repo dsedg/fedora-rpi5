@@ -1,10 +1,10 @@
 {
   "rpi-6.18.y": {
-    "commit": "7375d9e569fb56ad3c9f353324821b0838fbdcd5",
+    "commit": "adb947547136096c91f037dd392cd8af3aa98451",
     "version": "6.18.64"
   },
   "rpi-7.3.y": {
-    "commit": "e910f6c2962a4295615e7056a118ce98b1e85ce4",
+    "commit": "1ef812a522e2a929f7a9a00f7e2ca0cff21086c7",
     "version": "7.3.5"
   }
 }
