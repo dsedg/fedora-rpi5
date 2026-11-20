@@ -64,8 +64,25 @@ if [[ ! -s "${source_archive}" ]]; then
 fi
 
 build_mode=-ba
+build_spec="${spec_file}"
 if [[ "${srpm_only}" == "true" ]]; then
     build_mode=-bs
+    build_spec="${topdir}/SPECS/kernel-rpi5.spec"
+    python3 - "${spec_file}" "${build_spec}" "${commit}" "${version}" <<'PY'
+import sys
+from pathlib import Path
+
+source, destination, commit, version = sys.argv[1:]
+lines = Path(source).read_text().splitlines()
+for name, value in (("kernel_commit", commit), ("kernel_version", version)):
+    prefix = f"%{{!?{name}:%global {name} "
+    matches = [index for index, line in enumerate(lines) if line.startswith(prefix)]
+    if len(matches) != 1 or not lines[matches[0]].endswith("}"):
+        raise SystemExit(f"Expected exactly one {name} default in {source}")
+    lines[matches[0]] = f"%global {name} {value}"
+
+Path(destination).write_text("\n".join(lines) + "\n")
+PY
 fi
 
 rpmbuild \
@@ -73,7 +90,7 @@ rpmbuild \
     --define "kernel_commit ${commit}" \
     --define "kernel_version ${version}" \
     "${build_mode}" \
-    "${spec_file}"
+    "${build_spec}"
 
 if [[ "${srpm_only}" == "true" ]]; then
     mapfile -t srpms < <(
