@@ -141,9 +141,9 @@ pin. Release tags include the branch, actual kernel version, and commit prefix
 when the upstream kernel version has not changed. The release workflow can also
 be manually dispatched to publish any pins that do not already have releases.
 
-COPR builds are triggered with COPR's GitHub webhook; no COPR API token is
-needed in GitHub Actions. In the `dsedg/kernel-rpi5` COPR project, configure
-two SCM packages using the repository URL
+COPR builds are triggered after the GitHub release is published; no COPR API
+token is needed in GitHub Actions. In the `dsedg/kernel-rpi5` COPR project,
+configure two SCM packages using the repository URL
 `https://github.com/dsedg/fedora-rpi5.git`, branch `main`, and the `make srpm`
 source method:
 
@@ -157,12 +157,23 @@ Enable auto-rebuild for both packages and configure the project's
 chroots. The selector spec files identify the branch; the make target reads
 the matching pin from `SOURCES/kernel-branch-pins.json` and generates an SRPM
 from the shared kernel spec. In the COPR project settings, open
-**Integrations** and copy the GitHub webhook URL; add it under the repository's
-**Settings → Webhooks** using `application/json` and the push event. COPR then
-rebuilds both packages when the repository changes. See COPR's
+**Integrations** and use the ID and UUID from the project's webhook URL to
+construct a custom webhook URL for each package:
+
+```text
+https://copr.fedorainfracloud.org/webhooks/custom/<ID>/<UUID>/kernel-rpi5-6.18/
+https://copr.fedorainfracloud.org/webhooks/custom/<ID>/<UUID>/kernel-rpi5-7.3/
+```
+
+Save these as the repository Actions secrets
+`COPR_WEBHOOK_KERNEL_RPI5_618` and `COPR_WEBHOOK_KERNEL_RPI5_73`, respectively.
+The release workflow POSTs to the matching package webhook only after its
+GitHub Release has been created successfully. Remove any existing COPR GitHub
+push webhook from the repository; push-triggered builds would start before the
+GitHub release and duplicate the post-release trigger.
+COPR still builds from the configured repository; it does not use the SRPM
+produced by the GitHub release workflow. See COPR's
 [SCM and webhook documentation](https://docs.copr.fedorainfracloud.org/user_documentation.html#webhooks).
-The webhook makes COPR build from the repository; it does not upload the SRPM
-produced by the GitHub release workflow.
 
 To locally build the currently resolved `rpi-7.3.y` revision, pass its commit
 and kernel version to the same script:
