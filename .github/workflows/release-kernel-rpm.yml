@@ -132,44 +132,6 @@ jobs:
           KERNEL_VERSION: ${{ matrix.version }}
         run: ./scripts/build-rpm.sh
 
-      - name: Submit source RPM to COPR when configured
-        if: ${{ !matrix.released }}
-        continue-on-error: true
-        env:
-          COPR_ENABLED: ${{ vars.COPR_ENABLED }}
-          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
-          COPR_PROJECT: dsedg/kernel-rpi5
-        run: |
-          set -euo pipefail
-          if [[ "${COPR_ENABLED}" != "true" ]]; then
-            echo "COPR_ENABLED is not true; skipping COPR submission."
-            exit 0
-          fi
-          if [[ -z "${COPR_CONFIG}" ]]; then
-            echo "COPR_ENABLED is true but COPR_CONFIG is empty." >&2
-            exit 1
-          fi
-
-          config="${HOME}/.config/copr"
-          mkdir -p "$(dirname "${config}")"
-          printf '%s\n' "${COPR_CONFIG}" > "${config}"
-          chmod 600 "${config}"
-          dnf install -y copr-cli
-
-          mapfile -t srpms < <(
-            find rpmbuild/SRPMS -maxdepth 1 -type f -name '*.src.rpm' -print | sort
-          )
-          if [[ "${#srpms[@]}" -ne 1 ]]; then
-            echo "Expected exactly one source RPM; found ${#srpms[@]}." >&2
-            exit 1
-          fi
-
-          copr-cli build --nowait \
-            --chroot fedora-44-aarch64 \
-            --chroot fedora-45-aarch64 \
-            --chroot fedora-rawhide-aarch64 \
-            "${COPR_PROJECT}" "${srpms[0]}"
-
       - name: Publish GitHub release
         if: ${{ !matrix.released }}
         env:

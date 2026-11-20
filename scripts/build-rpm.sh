@@ -24,8 +24,19 @@ fi
 
 source_archive="${source_dir}/${commit}.tar.gz"
 source_url="https://github.com/raspberrypi/linux/archive/${commit}.tar.gz"
+srpm_only="${BUILD_SRPM_ONLY:-false}"
 
-if [[ "$(uname -m)" != "aarch64" ]]; then
+if [[ "${srpm_only}" != "true" && "${srpm_only}" != "false" ]]; then
+    printf 'BUILD_SRPM_ONLY must be true or false.\n' >&2
+    exit 1
+fi
+
+if [[ "${srpm_only}" == "true" && -z "${COPR_SRPM_OUTDIR:-}" ]]; then
+    printf 'COPR_SRPM_OUTDIR is required when BUILD_SRPM_ONLY=true.\n' >&2
+    exit 1
+fi
+
+if [[ "${srpm_only}" != "true" && "$(uname -m)" != "aarch64" ]]; then
     printf 'Build on an aarch64 Fedora host; found %s.\n' "$(uname -m)" >&2
     exit 1
 fi
@@ -52,8 +63,29 @@ if [[ ! -s "${source_archive}" ]]; then
     curl --fail --location --retry 3 "${source_url}" --output "${source_archive}"
 fi
 
+build_mode=-ba
+if [[ "${srpm_only}" == "true" ]]; then
+    build_mode=-bs
+fi
+
 rpmbuild \
     --define "_topdir ${topdir}" \
     --define "kernel_commit ${commit}" \
     --define "kernel_version ${version}" \
-    -ba "${spec_file}"
+    "${build_mode}" \
+    "${spec_file}"
+
+if [[ "${srpm_only}" == "true" ]]; then
+    mapfile -t srpms < <(
+        find "${topdir}/SRPMS" -maxdepth 1 -type f \
+            -name "kernel-${version}-*.src.rpm" -print | sort
+    )
+    if [[ "${#srpms[@]}" -ne 1 ]]; then
+        printf 'Expected exactly one source RPM for %s; found %s.\n' \
+            "${version}" "${#srpms[@]}" >&2
+        exit 1
+    fi
+
+    mkdir -p "${COPR_SRPM_OUTDIR}"
+    cp "${srpms[0]}" "${COPR_SRPM_OUTDIR}/"
+fi
