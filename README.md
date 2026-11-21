@@ -45,6 +45,16 @@ The Wi-Fi and Bluetooth drivers also need firmware blobs from Fedora's
 `linux-firmware` package; those blobs are not part of this kernel RPM. Ensure
 that package is present in the target Fedora or Atomic image.
 
+## Raspberry Pi firmware device tree
+
+The kernel RPM configures U-Boot to use the Raspberry Pi firmware-provided
+device tree so firmware overlays in `/boot/efi/config.txt` are passed to Linux.
+After `kernel-install` creates the current-kernel `/boot/dtb` symlink, the RPM
+removes that symlink and sets `FirmwareDT=True` in `/etc/u-boot.conf`. The
+versioned DTBs remain packaged under `/usr/lib/modules/<kernelrelease>/dtb`.
+Kernel updates repeat this setup because `kernel-install` may recreate the
+symlink.
+
 ## Plasma Bigscreen slimline variant
 
 The opt-in `bigscreen` flavor builds only against the `rpi-7.3.y` kernel line
