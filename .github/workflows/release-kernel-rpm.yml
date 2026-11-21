@@ -144,6 +144,7 @@ jobs:
         if: ${{ !matrix.released }}
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ matrix.tag }}
           KERNEL_COMMIT: ${{ matrix.commit }}
           KERNEL_VERSION: ${{ matrix.version }}
