@@ -292,6 +292,22 @@ touch %{_localstatedir}/lib/rpm-state/%{name}/installing_core_%{kernelrelease}
 %posttrans core
 rm -f %{_localstatedir}/lib/rpm-state/%{name}/installing_core_%{kernelrelease}
 /bin/kernel-install add %{kernelrelease} /lib/modules/%{kernelrelease}/vmlinuz || :
+if [ -e /boot/dtb ] && [ ! -L /boot/dtb ]; then
+    echo "Expected /boot/dtb to be a symlink; refusing to remove it." >&2
+    exit 1
+fi
+if [ -L /boot/dtb ]; then
+    rm -f /boot/dtb
+fi
+if [ -f /etc/u-boot.conf ]; then
+    if grep -q '^[[:space:]]*FirmwareDT=' /etc/u-boot.conf; then
+        sed -i 's/^[[:space:]]*FirmwareDT=.*/FirmwareDT=True/' /etc/u-boot.conf
+    else
+        printf '\nFirmwareDT=True\n' >> /etc/u-boot.conf
+    fi
+else
+    printf 'FirmwareDT=True\n' > /etc/u-boot.conf
+fi
 
 %preun core
 /bin/kernel-install remove %{kernelrelease} || :
