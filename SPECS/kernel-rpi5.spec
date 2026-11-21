@@ -3,7 +3,7 @@
 %{!?kernel_flavor:%global kernel_flavor standard}
 
 %if "%{kernel_flavor}" == "bigscreen"
-Name:           kernel-rpi5-bigscreen
+Name:           kernel
 Release:        300.rpi5bs%{?dist}
 %else
 Name:           kernel

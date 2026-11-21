@@ -80,13 +80,17 @@ build_spec="${spec_file}"
 if [[ "${srpm_only}" == "true" ]]; then
     build_mode=-bs
     build_spec="${topdir}/SPECS/kernel-rpi5.spec"
-    python3 - "${spec_file}" "${build_spec}" "${commit}" "${version}" <<'PY'
+    python3 - "${spec_file}" "${build_spec}" "${commit}" "${version}" "${flavor}" <<'PY'
 import sys
 from pathlib import Path
 
-source, destination, commit, version = sys.argv[1:]
+source, destination, commit, version, flavor = sys.argv[1:]
 lines = Path(source).read_text().splitlines()
-for name, value in (("kernel_commit", commit), ("kernel_version", version)):
+for name, value in (
+    ("kernel_commit", commit),
+    ("kernel_version", version),
+    ("kernel_flavor", flavor),
+):
     prefix = f"%{{!?{name}:%global {name} "
     matches = [index for index, line in enumerate(lines) if line.startswith(prefix)]
     if len(matches) != 1 or not lines[matches[0]].endswith("}"):
@@ -106,17 +110,13 @@ rpmbuild \
     "${build_spec}"
 
 if [[ "${srpm_only}" == "true" ]]; then
-    rpm_name=kernel
-    if [[ "${flavor}" == "bigscreen" ]]; then
-        rpm_name=kernel-rpi5-bigscreen
-    fi
     mapfile -t srpms < <(
         find "${topdir}/SRPMS" -maxdepth 1 -type f \
-            -name "${rpm_name}-${version}-*.src.rpm" -print | sort
+            -name "kernel-${version}-*.src.rpm" -print | sort
     )
     if [[ "${#srpms[@]}" -ne 1 ]]; then
-        printf 'Expected exactly one source RPM for %s (%s); found %s.\n' \
-            "${version}" "${rpm_name}" "${#srpms[@]}" >&2
+        printf 'Expected exactly one kernel source RPM for %s; found %s.\n' \
+            "${version}" "${#srpms[@]}" >&2
         exit 1
     fi
 

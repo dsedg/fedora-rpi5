@@ -50,8 +50,10 @@ that package is present in the target Fedora or Atomic image.
 The opt-in `bigscreen` flavor builds only against the `rpi-7.3.y` kernel line
 and is intended for a Raspberry Pi 5 Plasma Bigscreen image. It is built in CI
 alongside the standard 6.18 and 7.3 packages, without changing either standard
-configuration. The package family is named `kernel-rpi5-bigscreen*` and uses a
-distinct kernel release so it can coexist with the standard kernel.
+configuration. It uses Fedora's `kernel`, `kernel-core`, and module package
+names so users can choose it as a replacement for the default kernel. Its
+distinct `rpi5bs` release tag lets it coexist with the standard kernel when
+desired.
 
 The Bigscreen config retains Fedora's security and filesystem baseline,
 Raspberry Pi HDMI/V3D graphics, general HDMI/RP1 audio, onboard Broadcom SDIO
@@ -158,14 +160,17 @@ request with each upstream commit and kernel version read from that commit's
 `rpi-7.3.y` pin also used as the local spec default. Merging a sync pull request
 runs the [release workflow](.github/workflows/release-kernel-rpm.yml), which
 builds RPMs and an SRPM and publishes a separate GitHub Release for each new
-pin. Release tags include the branch, actual kernel version, and commit prefix
-(for example, `kernel-7.3.y-7.3.5-1ef812a522e2`), so updates are tracked even
-when the upstream kernel version has not changed. The release workflow can also
-be manually dispatched to publish any pins that do not already have releases.
+pin and flavor. Both branches publish the standard flavor; 7.3.y also publishes
+the Bigscreen flavor. Release tags include the branch, flavor (for Bigscreen),
+actual kernel version, and commit prefix (for example,
+`kernel-7.3.y-bigscreen-7.3.5-1ef812a522e2`), so updates are tracked even when
+the upstream kernel version has not changed. The release workflow can also be
+manually dispatched to publish any pins and flavors that do not already have
+releases.
 
-COPR builds are triggered with COPR's GitHub webhook; no COPR API token is
-needed in GitHub Actions. In the `dsedg/kernel-rpi5` COPR project, configure
-two SCM packages using the repository URL
+COPR builds are triggered after the GitHub release is published; no COPR API
+token is needed in GitHub Actions. In the `dsedg/kernel-rpi5` COPR project,
+configure two SCM packages using the repository URL
 `https://github.com/dsedg/fedora-rpi5.git`, branch `main`, and the `make srpm`
 source method:
 
@@ -173,18 +178,39 @@ source method:
 | --- | --- |
 | `kernel-rpi5-6.18` | `.copr/kernel-rpi5-6.18.spec` |
 | `kernel-rpi5-7.3` | `.copr/kernel-rpi5-7.3.spec` |
+| `kernel-rpi5-7.3-bigscreen` | `.copr/kernel-rpi5-7.3-bigscreen.spec` |
 
-Enable auto-rebuild for both packages and configure the project's
+Enable auto-rebuild for all three packages and configure the project's
 `fedora-44-aarch64`, `fedora-45-aarch64`, and `fedora-rawhide-aarch64`
 chroots. The selector spec files identify the branch; the make target reads
 the matching pin from `SOURCES/kernel-branch-pins.json` and generates an SRPM
-from the shared kernel spec. In the COPR project settings, open
-**Integrations** and copy the GitHub webhook URL; add it under the repository's
-**Settings → Webhooks** using `application/json` and the push event. COPR then
-rebuilds both packages when the repository changes. See COPR's
+from the shared kernel spec. COPR builds `rpi-6.18.y` with the standard flavor,
+`rpi-7.3.y` with the standard config, and `rpi-7.3.y` with the Bigscreen
+slimline config. The release workflow triggers each matching COPR build once.
+In the COPR project settings, open
+**Integrations** and use the ID and UUID from the project's webhook URL to
+construct a custom webhook URL for each package:
+
+```text
+https://copr.fedorainfracloud.org/webhooks/custom/<ID>/<UUID>/kernel-rpi5-6.18/
+https://copr.fedorainfracloud.org/webhooks/custom/<ID>/<UUID>/kernel-rpi5-7.3/
+https://copr.fedorainfracloud.org/webhooks/custom/<ID>/<UUID>/kernel-rpi5-7.3-bigscreen/
+```
+
+Save these as the repository Actions secrets
+`COPR_WEBHOOK_KERNEL_RPI5_618`, `COPR_WEBHOOK_KERNEL_RPI5_73`, and
+`COPR_WEBHOOK_KERNEL_RPI5_73_BIGSCREEN`, respectively.
+The release workflow POSTs to the matching package webhook only after its
+GitHub Release has been created successfully. Remove any existing COPR GitHub
+push webhook from the repository; push-triggered builds would start before the
+GitHub release and duplicate the post-release trigger.
+Remove any obsolete SCM package named `kernel` and keep the three
+`kernel-rpi5-6.18`, `kernel-rpi5-7.3`, and
+`kernel-rpi5-7.3-bigscreen` SCM entries. Do not configure a project-wide
+GitHub push webhook.
+COPR still builds from the configured repository; it does not use the SRPM
+produced by the GitHub release workflow. See COPR's
 [SCM and webhook documentation](https://docs.copr.fedorainfracloud.org/user_documentation.html#webhooks).
-The webhook makes COPR build from the repository; it does not upload the SRPM
-produced by the GitHub release workflow.
 
 To locally build the currently resolved `rpi-7.3.y` revision, pass its commit
 and kernel version to the same script:

@@ -3,14 +3,30 @@ set -euo pipefail
 
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 branch="${1:-}"
+flavor="${2:-}"
 
 case "${branch}" in
-    rpi-6.18.y|rpi-7.3.y) ;;
+    rpi-6.18.y)
+        flavor="${flavor:-standard}"
+        ;;
+    rpi-7.3.y)
+        flavor="${flavor:-standard}"
+        ;;
     *)
         printf 'Unsupported Raspberry Pi kernel branch: %s\n' "${branch}" >&2
         exit 1
         ;;
 esac
+
+if [[ "${flavor}" != "standard" && "${flavor}" != "bigscreen" ]]; then
+    printf 'Unsupported Raspberry Pi kernel flavor: %s\n' "${flavor}" >&2
+    exit 1
+fi
+
+if [[ "${branch}" != "rpi-7.3.y" && "${flavor}" == "bigscreen" ]]; then
+    printf 'The Bigscreen kernel variant is only supported on rpi-7.3.y.\n' >&2
+    exit 1
+fi
 
 if [[ -z "${COPR_SRPM_OUTDIR:-}" ]]; then
     printf 'COPR_SRPM_OUTDIR is required.\n' >&2
@@ -44,5 +60,6 @@ cd "${repo_dir}"
 BUILD_SRPM_ONLY=true \
 KERNEL_COMMIT="${commit}" \
 KERNEL_VERSION="${version}" \
+KERNEL_FLAVOR="${flavor}" \
 COPR_SRPM_OUTDIR="${COPR_SRPM_OUTDIR}" \
     ./scripts/build-rpm.sh
