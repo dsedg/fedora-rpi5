@@ -169,16 +169,24 @@ jobs:
         if: >-
           !matrix.released &&
           ((matrix.branch == 'rpi-6.18.y' && matrix.flavor == 'standard') ||
-          (matrix.branch == 'rpi-7.3.y' && matrix.flavor == 'bigscreen'))
+          (matrix.branch == 'rpi-7.3.y'))
         env:
           KERNEL_BRANCH: ${{ matrix.branch }}
+          KERNEL_FLAVOR: ${{ matrix.flavor }}
           COPR_WEBHOOK_KERNEL_RPI5_618: ${{ secrets.COPR_WEBHOOK_KERNEL_RPI5_618 }}
           COPR_WEBHOOK_KERNEL_RPI5_73: ${{ secrets.COPR_WEBHOOK_KERNEL_RPI5_73 }}
+          COPR_WEBHOOK_KERNEL_RPI5_73_BIGSCREEN: ${{ secrets.COPR_WEBHOOK_KERNEL_RPI5_73_BIGSCREEN }}
         run: |
           set -euo pipefail
           case "${KERNEL_BRANCH}" in
             rpi-6.18.y) webhook_url="${COPR_WEBHOOK_KERNEL_RPI5_618}" ;;
-            rpi-7.3.y) webhook_url="${COPR_WEBHOOK_KERNEL_RPI5_73}" ;;
+            rpi-7.3.y)
+              case "${KERNEL_FLAVOR}" in
+                standard) webhook_url="${COPR_WEBHOOK_KERNEL_RPI5_73}" ;;
+                bigscreen) webhook_url="${COPR_WEBHOOK_KERNEL_RPI5_73_BIGSCREEN}" ;;
+                *) echo "Unsupported COPR kernel flavor: ${KERNEL_FLAVOR}" >&2; exit 1 ;;
+              esac
+              ;;
             *)
               echo "Unsupported COPR kernel branch: ${KERNEL_BRANCH}" >&2
               exit 1
