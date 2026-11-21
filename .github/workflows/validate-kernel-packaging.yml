@@ -1,0 +1,67 @@
+name: Validate Raspberry Pi kernel packaging
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check shell script syntax
+        run: bash -n scripts/*.sh
+
+      - name: Validate kernel pins and spec defaults
+        run: |
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          expected_branches = {"rpi-6.18.y", "rpi-7.3.y"}
+          pins = json.loads(Path("SOURCES/kernel-branch-pins.json").read_text())
+          if not isinstance(pins, dict) or set(pins) != expected_branches:
+              raise SystemExit("Kernel pin manifest does not contain all supported branches")
+
+          for branch, pin in pins.items():
+              if not isinstance(pin, dict) or set(pin) != {"commit", "version"}:
+                  raise SystemExit(f"Invalid pin entry for {branch}")
+              commit = pin["commit"]
+              version = pin["version"]
+              if not isinstance(commit, str) or not re.fullmatch(
+                  r"[0-9a-f]{40}", commit
+              ):
+                  raise SystemExit(f"Invalid commit pin for {branch}")
+              if not isinstance(version, str) or not re.fullmatch(
+                  r"[0-9]+\.[0-9]+\.[0-9]+", version
+              ):
+                  raise SystemExit(f"Invalid version pin for {branch}")
+
+          spec = Path("SPECS/kernel-rpi5.spec").read_text().splitlines()
+          current_pin = pins["rpi-7.3.y"]
+          for name, value in (
+              ("kernel_commit", current_pin["commit"]),
+              ("kernel_version", current_pin["version"]),
+          ):
+              prefix = f"%{{!?{name}:%global {name} "
+              matches = [
+                  line[len(prefix):-1]
+                  for line in spec
+                  if line.startswith(prefix) and line.endswith("}")
+              ]
+              if matches != [value]:
+                  raise SystemExit(
+                      f"{name} default in SPECS/kernel-rpi5.spec "
+                      "does not match the rpi-7.3.y pin"
+                  )
+          PY

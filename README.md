@@ -140,17 +140,14 @@ The script uses only Python's standard library.
 
 ## GitHub Actions and kernel branches
 
-The workflow in [`.github/workflows/build-kernel-rpm.yml`](.github/workflows/build-kernel-rpm.yml)
-builds `rpi-6.18.y` and `rpi-7.3.y` on native ARM64
-GitHub-hosted runners in a Fedora 45 container. It runs for pushes to `main`,
-pull requests, weekly, or manually. Each run resolves the selected upstream
-branch to a commit and uploads the RPMs, including generated debuginfo and
-debugsource packages, and source RPM as downloadable workflow artifacts. The
-`rpi-7.3.y` branch currently reports kernel version 7.3.5.
-
-The local spec defaults remain pinned; the workflow passes each branch's
-resolved commit and version as RPM macros, so builds are reproducible for the
-specific commit logged in the Actions run.
+The [packaging validation workflow](.github/workflows/validate-kernel-packaging.yml)
+runs on pushes to `main` and pull requests. It checks shell syntax and validates
+the kernel pin manifest against the RPM spec defaults without compiling the
+kernel. The [build workflow](.github/workflows/build-kernel-rpm.yml) can be
+manually dispatched to build the latest upstream branches and upload RPM
+artifacts for testing. Release builds run in the
+[release workflow](.github/workflows/release-kernel-rpm.yml), after a kernel-pin
+sync pull request is merged or when that workflow is manually dispatched.
 
 The [sync workflow](.github/workflows/sync-kernel-pin.yml) checks
 `rpi-6.18.y` and `rpi-7.3.y` weekly and opens or updates a pull
